@@ -82,3 +82,82 @@ If you are using the **`endpoints → sso`** option or the **`AWS_ENDPOINT_URL`*
 
 1 . **State encryption**
 
+**State encryption** has long been one of Terraform’s most requested features, but it was never delivered. However, after just six months in existence, the OpenTofu team has listened to the community and released, state encryption.
+
+**OpenTofu’s encryption** mechanism allows you to encrypt both your state files and your plan files. 
+
+1. **Why should you encrypt your state file?**
+
+**Encrypting your state** and plan files is **critical in infrastructure management** because they often contain sensitive information such as **credentials, access keys**, and configurations. If these are exposed, your infrastructure can have serious problems, which could lead to severe security breaches. 
+
+2. **How does OpenTofu state encryption work?**
+
+**OpenTofu state encryption** works through robust **encryption methods and key providers**. It currently supports the following key providers:  **`PBKDF2, AWS KMS, GCP KMS, and OpenBao in beta`**. The encryption method can be either AES-GCM or unencrypted (used only for explicit migration to and from encryption). AES-GCM ensures data integrity by making any unauthorized changes detectable, making your IaC secure and reliable.
+
+OpenTofu uses these mechanisms to encrypt your state data at rest. **`If you enable it, you won’t be able to recover the state/plan files without the appropriate encryption key`**.
+
+3. **How to configure state encryption?**
+
+* **key_provider** – **Specifies the key provider for the encryption**, can be PBKDF2, AWS KMS, GCP KMS, orOpenBao. Depending on which key provider you select, you will have different configuration options.
+* **method** – The encryption method to be used, currently the option is AES-GCM which permits 16, 24, and 32-byte keys.
+* **state and/or plan** – Here you specify the encryption method and a fallback option because OpenTofu lets you automatically roll over your encryption configuration to an old one by having this fallback option.
+* **remote_state_data_source** – You have the option to also configure encryption for remote state that you leverage through the “terraform_remote_state” datasource.
+
+```sh
+terraform {
+ encryption {
+   key_provider "pbkdf2" "migration_key" {
+     passphrase    = "super-passphrase-hard-to-find"
+     key_length    = 32
+     salt_length   = 16
+     hash_function = "sha256"
+   }
+   method "aes_gcm" "secure_method" {
+     keys = key_provider.pbkdf2.migration_key
+   }
+   state {
+     method = method.aes_gcm.secure_method
+   }
+ }
+}
+
+resource "random_pet" "one" {}
+```
+```sh
+tofu apply
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+Do you want to perform these actions?
+ OpenTofu will perform the actions described above.
+ Only 'yes' will be accepted to approve.
+
+ Enter a value: yes
+
+random_pet.one: Creating...
+random_pet.one: Creation complete after 0s [id=glad-bat]
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+```
+```json
+{
+   "serial": 1,
+   "lineage": "92dada5a-e8a8-b917-73b0-25a9a8e19714",
+   "meta": {
+       "key_provider.pbkdf2.migration_key": "..."
+   },
+   "encrypted_data": "RL…",
+   "encryption_version": "v0"
+}
+```
+```sh
+tofu state list
+random_pet.one
+```
+Let’s change the passphrase and try to run the command again:
+```sh
+tofu state list
+Failed to load state: decryption failed for all provided methods: attempted decryption failed for state: decryption failed: cipher: message authentication failed
+```
+
+4. **Configure state encryption through AWS KMS**
