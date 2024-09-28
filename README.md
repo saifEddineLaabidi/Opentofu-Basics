@@ -235,3 +235,105 @@ terraform {
   }
 }
 ```
+
+### Provider-defined functions
+
+
+What's more, we added an OpenTofu-only feature to let providers dynamically **define custom functions** based on your configuration. This enhancement allows you to fully integrate other programming languages as shown in our live stream. You can try out this functionality with our experimental Lua and Go providers.
+
+```sh
+terraform {
+  required_providers {
+    corefunc = {
+      source = "northwood-labs/corefunc"
+      version = "1.4.0"
+    }
+  }
+}
+
+provider "corefunc" {
+}
+
+output "test" {
+  value = provider::corefunc::str_snake("Hello world!")
+  # Prints: hello_world
+}
+```
+
+### Removed block
+
+there are instances when you want to remove a resource from your configuration without destroying the corresponding infrastructure object. In such cases, you can remove it from the OpenTofu state while allowing it to persist in the remote system.
+
+```
+removed {
+  from = aws_instance.web
+}
+```
+```
+resource "local_file" "test" {
+  content = "Hello world!"
+  filename = "test.txt"
+}
+```
+```
+removed {
+  from = local_file.test
+}
+```
+
+### Loopable import blocks
+
+In previous OpenTofu versions, you could already use the import block to declaratively import resources, for example:
+
+```
+resource "random_id" "test_id" {
+  byte_length = 8
+}
+
+import {
+  to = random_id.test_id
+  id = "Y2FpOGV1Mkk"
+}
+
+output "id" {
+  value = random_id.test_id.b64_url
+}
+```
+```sh
+#["server1", "server2"]
+variable "server_ids" {
+  type = list(string)
+}
+
+resource "random_id" "test_id" {
+  byte_length = 8
+  count = 2
+}
+
+import {
+  to = random_id.test_id[tonumber(each.key)]
+  id = each.value
+  for_each = {
+    for idx, item in var.server_ids: idx => item
+  }
+}
+
+output "id" {
+  value = random_id.test_id.*.b64_url
+}
+```
+
+### Built-in function changes
+
+This release also contains several new functions and changes to existing functions:
+
+New function: [templatestring](https://opentofu.org/docs/v1.7/language/functions/templatestring/)
+New function: [base64gunzip](https://opentofu.org/docs/v1.7/language/functions/base64gunzip/)
+New function: [cidrcontains](https://opentofu.org/docs/v1.7/language/functions/cidrcontains/)
+New function: [urldecode](https://opentofu.org/docs/v1.7/language/functions/urldecode/)
+New function: [issensitive](https://opentofu.org/docs/v1.7/language/functions/issensitive/)
+[nonsensitive](https://opentofu.org/docs/v1.7/language/functions/nonsensitive/) no longer returns an error when the applied values are not sensitive.
+[templatefile](https://opentofu.org/docs/v1.7/language/functions/templatefile/) now supports recursion up to a depth of 1024.
+
+
+## What's new in OpenTofu 1.8?
