@@ -1,5 +1,5 @@
 # OpenTofu
-
+- [opentofu registry](https://search.opentofu.org/)
 - [Why OpenTofu](https://opentofu.org/docs/v1.6/intro/use-cases/)
 - [Manifesto](https://opentofu.org/manifesto)
 - [About the OpenTofu fork](https://opentofu.org/fork)
@@ -80,7 +80,7 @@ If you are using the **`endpoints → sso`** option or the **`AWS_ENDPOINT_URL`*
 
 ## What's new in OpenTofu 1.7
 
-1 . **State encryption**
+### State encryption
 
 **State encryption** has long been one of Terraform’s most requested features, but it was never delivered. However, after just six months in existence, the OpenTofu team has listened to the community and released, state encryption.
 
@@ -161,3 +161,77 @@ Failed to load state: decryption failed for all provided methods: attempted decr
 ```
 
 4. **Configure state encryption through AWS KMS**
+
+``` sh
+terraform {
+ encryption {
+   key_provider "aws_kms" "kms_key" {
+     kms_key_id = "18370188-.."
+     key_spec   = "AES_256"
+     region     = "eu-west-1"
+   }
+   method "aes_gcm" "secure_method" {
+     keys = key_provider.aws_kms.kms_key
+   }
+   state {
+     method = method.aes_gcm.secure_method
+   }
+ }
+}
+
+resource "random_pet" "one" {}
+```
+Repeat the init/apply steps, and then check the state file:
+
+```json
+{
+   "serial": 1,
+   "lineage": "d97396a4-7d24-aa29-add7-22abf0a563d8",
+   "meta": {
+       "key_provider.aws_kms.kms_key": ".."
+   },
+   "encrypted_data": "...,
+   "encryption_version": "v0"
+}
+```
+
+5. **State encryption with Spacelift**
+
+```sh
+terraform {
+ backend "remote" {
+   hostname     = "spacelift.io"
+   organization = "saturnhead"
+
+   workspaces {
+     name = "tofu_state_encryption"
+   }
+ }
+ encryption {
+   key_provider "aws_kms" "kms_key" {
+     kms_key_id = "18370188-.."
+     key_spec   = "AES_256"
+     region     = "eu-west-1"
+   }
+   method "aes_gcm" "secure_method" {
+     keys = key_provider.aws_kms.kms_key
+   }
+   state {
+     method = method.aes_gcm.secure_method
+   }
+ }
+}
+```
+
+6. **GCP KMS**
+
+```
+terraform {
+  encryption {
+    key_provider "gcp_kms" "basic" {
+      kms_encryption_key = "projects/local-vehicle-id/locations/global/keyRings/ringid/cryptoKeys/keyid"
+      key_length = 32
+    }
+  }
+}
+```
