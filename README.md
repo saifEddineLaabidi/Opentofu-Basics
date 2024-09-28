@@ -337,3 +337,231 @@ This release also contains several new functions and changes to existing functio
 
 
 ## What's new in OpenTofu 1.8?
+
+### Early variable/locals evaluation
+
+This is by far the most highly anticipated feature of the release. Seven years ago, one of the issues with Terraform was that you couldn’t add variables to the terraform block. There were some hacky workarounds that you could use, but they never felt like the right approach.
+
+```
+variable "aws_region" {
+  default = "us-east-1"
+}
+
+terraform {
+  backend "s3" {
+    region = var.aws_region
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+```sh
+tofu -v
+OpenTofu v1.7.0
+on darwin_arm64
+
+
+tofu init
+Initializing the backend...
+╷
+│ Error: Variables not allowed
+│
+│   on main.tf line 11, in terraform:
+│   11:     region = var.region
+│
+│ Variables may not be used here.
+```
+Now, with OpenTofu 1.8, this is easy:
+
+```sh
+tofu18 -v                                            
+OpenTofu v1.8.0
+on darwin_arm64
+
+
+tofu18 init
+Initializing the backend...
+Initializing provider plugins...
+OpenTofu has been successfully initialized!
+```
+* example 2
+```
+locals {
+  aws_module_version = "5.6.1"
+}
+
+module "webserver" {
+  source  = "terraform-aws-modules/ec2-instance/aws"
+  version = local.aws_module_version
+
+  // Other ec2_instance options
+}
+
+module "db" {
+  source  = "https://github.com/terraform-aws-modules/terraform-aws-ec2-instance?ref=v${local.aws_module_version}"
+
+  // Other ec2_instance options
+}
+```
+* example 3
+
+```
+variable "passphrase" {
+  type = string
+}
+
+terraform {
+  encryption {
+    key_provider "pbkdf2" "my_passphrase" {
+      passphrase = var.passphrase
+    }
+
+    method "aes_gcm" "my_method" {
+      keys = key_provider.pbkdf2.my_passphrase
+    }
+
+    state {
+      method = method.aes_gcm.my_method
+    }
+  }
+}
+```
+
+* example 4
+
+```
+module "vpc" {
+ source  = "terraform-aws-modules/vpc/aws"
+ version = var.vers
+}
+
+
+variable "vers" {
+ default = "5.9.0"
+}
+```
+```sh
+│ Error: Variables not allowed
+│
+│   on main.tf line 20, in module "vpc":
+│   20:   version = var.vers
+│
+│ Variables may not be used here.
+```
+But now, OpenTofu 1.8 allows this:
+
+```
+Successfully configured the backend "s3"! OpenTofu will automatically
+use this backend unless the backend configuration changes.
+Initializing modules...
+Downloading registry.opentofu.org/terraform-aws-modules/vpc/aws 5.9.0 for vpc...
+- vpc in .terraform/modules/vpc
+
+
+OpenTofu has been successfully initialized!
+```
+```
+locals {
+ aks_version = "v1.0.12"
+}
+
+
+module "aks" {
+ source = "git::https://github.com/flavius-dinu/terraform-az-aks.git?ref=${local.aks_version}"
+}
+```
+```
+Initializing modules...
+Downloading git::https://github.com/flavius-dinu/terraform-az-aks.git?ref=v1.0.12 for aks...
+- aks in .terraform/modules/aks
+
+
+OpenTofu has been successfully initialized!
+```
+
+
+### Provider mocking in tofu test
+
+```
+provider "aws" {
+    region = "us-east-1"
+}
+
+data "aws_ami" "ubuntu" {
+    most_recent = true
+    filter {
+      name   = "name"
+      values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-24.04-amd64-server-*"]
+    }
+    owners = ["099720109477"]
+}
+
+resource "aws_instance" "web" {
+    ami           = data.aws_ami.ubuntu.id
+    instance_type = "m6i.2xlarge"
+}
+```
+Instead of querying the AMI ID and spinning up the instance, we can write test code as follows:
+
+```
+// This block will prevent OpenTofu from configuring aws provider.
+// All provider's resources and data sources will be mocked.
+mock_provider "aws" {
+  mock_data "aws_ami" {
+    defaults = {
+      id = "ami-12345"
+    }
+  }
+}
+
+run "test" {
+  assert {
+    condition     = aws_instance.web.ami == "ami-12345"
+    error_message = "Incorrect AMI ID passed to aws_instance.web: ${aws_instance.web.ami}"
+  }
+}
+```
+While this will not fully test the entire provisioning, it will highlight errors that may be caused by incorrectly connecting resources together without the need for an actual AWS account.
+
+### Resource overrides in tofu test
+ 
+You can now override resources, data sources and entire modules from your tests, allowing you to **create similar behavior** to mocks in traditional software testing. As an example, consider the following code that spins up an m6i.2xlarge instance on AWS:
+
+```
+provider "aws" {
+  access_key = "foo"
+  secret_key = "bar"
+
+  skip_credentials_validation = true
+  skip_region_validation      = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+}
+
+# This block disables refreshing the aws_ami.ubuntu data source
+# and lets you manually specify the values:
+override_data {
+  target = data.aws_ami.ubuntu
+  values = {
+    id = "ami-12345"
+  }
+}
+
+run "test" {
+  # This block disables provisioning the aws_instance.web resource:
+  override_resource {
+    target = aws_instance.web
+    values = {
+      # You can add values here.
+    }
+  }
+
+  assert {
+    condition     = aws_instance.web.ami == "ami-12345"
+    error_message = "Incorrect AMI ID passed to aws_instance.web: ${aws_instance.web.ami}"
+  }
+}
+```
