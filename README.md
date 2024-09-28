@@ -327,13 +327,13 @@ output "id" {
 
 This release also contains several new functions and changes to existing functions:
 
-New function: [templatestring](https://opentofu.org/docs/v1.7/language/functions/templatestring/)
-New function: [base64gunzip](https://opentofu.org/docs/v1.7/language/functions/base64gunzip/)
-New function: [cidrcontains](https://opentofu.org/docs/v1.7/language/functions/cidrcontains/)
-New function: [urldecode](https://opentofu.org/docs/v1.7/language/functions/urldecode/)
-New function: [issensitive](https://opentofu.org/docs/v1.7/language/functions/issensitive/)
-[nonsensitive](https://opentofu.org/docs/v1.7/language/functions/nonsensitive/) no longer returns an error when the applied values are not sensitive.
-[templatefile](https://opentofu.org/docs/v1.7/language/functions/templatefile/) now supports recursion up to a depth of 1024.
+* New function: [templatestring](https://opentofu.org/docs/v1.7/language/functions/templatestring/)
+* New function: [base64gunzip](https://opentofu.org/docs/v1.7/language/functions/base64gunzip/)
+* New function: [cidrcontains](https://opentofu.org/docs/v1.7/language/functions/cidrcontains/)
+* New function: [urldecode](https://opentofu.org/docs/v1.7/language/functions/urldecode/)
+* New function: [issensitive](https://opentofu.org/docs/v1.7/language/functions/issensitive/)
+* [nonsensitive](https://opentofu.org/docs/v1.7/language/functions/nonsensitive/) no longer returns an error when the applied values are not sensitive.
+* [templatefile](https://opentofu.org/docs/v1.7/language/functions/templatefile/) now supports recursion up to a depth of 1024.
 
 
 ## What's new in OpenTofu 1.8?
