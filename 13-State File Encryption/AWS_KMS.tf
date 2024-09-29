@@ -15,3 +15,4 @@ terraform {
 }
 
 resource "random_pet" "one" {}
+
